@@ -1,0 +1,49 @@
+/* ========================================================== */
+/* === Template: Classic Elegant === */
+/* ========================================================== */
+/* Tema ini memberikan tampilan yang elegan dan tradisional. */
+
+body {
+    background-color: #f4f2ed; /* Warna krem lembut */
+    color: #4a4a4a; /* Coklat tua untuk teks */
+}
+
+h1, h2, h3, .script-font {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: #3b3b3b;
+}
+
+.open-button {
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #333;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 50px;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.event-card, .wishes-box, .gift-card {
+    background-color: #ffffff;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    border: 1px solid #eee;
+}
+
+.map-button, .wishes-form button, .copy-button {
+    background-color: #8b786d; /* Coklat lembut */
+    color: #fff;
+}
+
+.map-button:hover, .wishes-form button:hover, .copy-button:hover {
+    background-color: #6d5d53;
+}
+
+.closing {
+    background-color: #e9e5de;
+}
+
+.comment {
+    background-color: #fff;
+    border: 1px solid #f0f0f0;
+}

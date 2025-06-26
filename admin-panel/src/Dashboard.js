@@ -1,245 +1,227 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Papa from 'papaparse';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-// Default State untuk Form Kosong, sebagai "cetakan" yang aman dan lengkap
-const defaultInvitationState = {
-  title: '',
-  template: 'template-classic',
-  couple: {
-    groom: { name: '', nick: '', father: '', mother: '' },
-    bride: { name: '', nick: '', father: '', mother: '' }
-  },
-  events: [
-    { type: 'Akad Nikah', date: '', time: '', venue: '', mapLink: '' }
-  ],
-  gifts: [
-    { bank: 'BCA', number: '', name: '' }
-  ],
-  gallery: [''], // State untuk galeri
-  story: '',
+// =================================================================
+// === SEMUA KOMPONEN HELPER DIDEFINISIKAN DI LEVEL ATAS (GLOBAL) ===
+// =================================================================
+
+const Toast = ({ message, show, type = 'success' }) => {
+    if (!show) return null;
+    const style = {
+        position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+        padding: '12px 20px', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        color: 'white', backgroundColor: type === 'success' ? '#28a745' : '#dc3545',
+        zIndex: 2000, opacity: show ? 1 : 0, transition: 'opacity 0.3s ease-in-out, top 0.3s ease-in-out',
+    };
+    return <div style={style}>{message}</div>;
 };
 
-// Komponen UI Helper
-const InputField = ({ label, ...props }) => (
-    <label style={{ display: 'block', marginBottom: '1rem' }}>
-        <span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span>
-        <input {...props} style={{ width: 'calc(100% - 1rem)', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }} />
-    </label>
-);
-const TextAreaField = ({ label, ...props }) => (
-    <label style={{ display: 'block', marginBottom: '1rem' }}>
-        <span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span>
-        <textarea {...props} style={{ width: 'calc(100% - 1rem)', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', minHeight: '80px' }} />
-    </label>
-);
+const RsvpModal = ({ isOpen, onClose, rsvps, invitationTitle, invitationId }) => {
+    if (!isOpen) return null;
+    const modalBackdropStyle = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
+    const modalContentStyle = { backgroundColor: 'white', padding: '25px', borderRadius: '8px', width: '90%', maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' };
+    const closeButtonStyle = { padding: '8px 16px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '20px', alignSelf: 'flex-end' };
+    const tableHeaderStyle = { padding: '10px', border: '1px solid #ddd', textAlign: 'left', backgroundColor: '#f2f2f2' };
+    const tableCellStyle = { padding: '10px', border: '1px solid #ddd', verticalAlign: 'middle' };
+    const hadirCount = rsvps.filter(r => r.attendance_status === 'Hadir').length;
+    const tidakHadirCount = rsvps.filter(r => r.attendance_status === 'Tidak Hadir').length;
+    const totalCount = rsvps.length;
 
-// Komponen Halaman Dashboard
+    return (
+        <div style={modalBackdropStyle} onClick={onClose}>
+            <div style={modalContentStyle} onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div>
+                        <h2 style={{marginTop: 0, marginBottom: '5px'}}>Daftar Kehadiran & Ucapan</h2>
+                        <p style={{marginTop: 0, color: '#555'}}>Untuk: <strong>{invitationTitle}</strong></p>
+                    </div>
+                    <a href={`http://localhost/proyek_undangan/api/export_rsvps.php?invitation_id=${invitationId}`} download style={{ padding: '8px 16px', backgroundColor: '#198754', color: 'white', textDecoration: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
+                        Ekspor ke CSV
+                    </a>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #eee' }}>
+                    <div style={{flex: 1, textAlign: 'center', padding: '10px', backgroundColor: '#e9f5e9', borderRadius: '5px'}}><div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#28a745'}}>{hadirCount}</div><div style={{fontSize: '0.9rem', color: '#555'}}>Hadir</div></div>
+                    <div style={{flex: 1, textAlign: 'center', padding: '10px', backgroundColor: '#fdeeee', borderRadius: '5px'}}><div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#dc3545'}}>{tidakHadirCount}</div><div style={{fontSize: '0.9rem', color: '#555'}}>Tidak Hadir</div></div>
+                    <div style={{flex: 1, textAlign: 'center', padding: '10px', backgroundColor: '#eef2f7', borderRadius: '5px'}}><div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#007bff'}}>{totalCount}</div><div style={{fontSize: '0.9rem', color: '#555'}}>Total Ucapan</div></div>
+                </div>
+                <div style={{overflowY: 'auto', flex: 1}}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead><tr><th style={tableHeaderStyle}>Nama Tamu</th><th style={tableHeaderStyle}>Kehadiran</th><th style={tableHeaderStyle}>Ucapan</th><th style={tableHeaderStyle}>Waktu</th></tr></thead>
+                        <tbody>{rsvps.length > 0 ? (rsvps.map((rsvp, index) => (<tr key={index}><td style={tableCellStyle}>{rsvp.guest_name}</td><td style={tableCellStyle}><span style={{padding: '4px 8px', borderRadius: '4px', color: 'white', backgroundColor: rsvp.attendance_status === 'Hadir' ? '#28a745' : '#dc3545' }}>{rsvp.attendance_status}</span></td><td style={tableCellStyle}>{rsvp.message}</td><td style={tableCellStyle}>{new Date(rsvp.created_at).toLocaleString('id-ID')}</td></tr>))) : (<tr><td colSpan="4" style={{textAlign: 'center', padding: '20px'}}>Belum ada data RSVP.</td></tr>)}</tbody>
+                    </table>
+                </div>
+                <button onClick={onClose} style={closeButtonStyle}>Tutup</button>
+            </div>
+        </div>
+    );
+};
+
+const MediaPreview = ({ url, onRemove }) => { const isVideo = ['.mp4', '.webm', '.ogg'].some(ext => url.toLowerCase().endsWith(ext)); return ( <div style={{ position: 'relative', width: '100px', height: '100px' }}><img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} /><button type="button" onClick={onRemove} style={{ position: 'absolute', top: '5px', right: '5px', background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', lineHeight: '18px', padding: 0 }}>✖</button></div> ); };
+
+const ImageUploader = ({ label, onUpload, isUploading, currentImage, onRemove, multiple = false, accept = "image/*" }) => { const fileInputRef = React.useRef(null); const handleButtonClick = () => fileInputRef.current.click(); return ( <div style={{ marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><button type="button" onClick={handleButtonClick} disabled={isUploading} style={{padding: '8px 12px', border: '1px solid #007bff', backgroundColor: 'white', color: '#007bff', borderRadius: '4px', cursor: 'pointer'}}>{isUploading ? 'Mengunggah...' : (currentImage ? 'Ganti' : 'Pilih File')}</button><input type="file" ref={fileInputRef} onChange={onUpload} disabled={isUploading} style={{ display: 'none' }} accept={accept} multiple={multiple} /></div> ); };
+
+const InputField = ({ label, ...props }) => (<label style={{ display: 'block', marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><input {...props} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }} /></label>);
+const TextAreaField = ({ label, ...props }) => (<label style={{ display: 'block', marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><textarea {...props} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', minHeight: '80px' }} /></label>);
+const SelectField = ({ label, children, ...props }) => (<label style={{ display: 'block', marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><select {...props} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }}>{children}</select></label>);
+
+const GuestListModal = ({ isOpen, onClose, invitationId, invitationTitle, showToast }) => {
+    // PERBAIKAN: Hooks sekarang di level atas, di dalam komponennya sendiri
+    const [guests, setGuests] = useState([]);
+    const [status, setStatus] = useState({ loading: true, error: '' });
+    const [newGuest, setNewGuest] = useState('');
+    const fileInputRef = useRef(null);
+    const [selectedGuests, setSelectedGuests] = useState([]);
+    
+    // PERBAIKAN: useCallback ditambahkan untuk fetchGuests, dan showToast disertakan sebagai dependensi
+    const fetchGuests = useCallback(async () => {
+        if (!invitationId) return;
+        setStatus({ loading: true, error: '' });
+        try {
+            const response = await fetch(`http://localhost/proyek_undangan/api/get_guests.php?invitation_id=${invitationId}`, { credentials: 'include' });
+            if (!response.ok) throw new Error('Gagal mengambil daftar tamu.');
+            const data = await response.json();
+            setGuests(data);
+        } catch (error) {
+            setStatus({ loading: false, error: error.message });
+        } finally {
+            setStatus({ loading: false, error: '' });
+        }
+    }, [invitationId]);
+    
+    useEffect(() => {
+        if (isOpen) {
+            fetchGuests();
+            setSelectedGuests([]);
+        }
+    }, [isOpen, invitationId, fetchGuests]);
+
+    const handleSaveGuests = useCallback(async (guestList) => { setStatus({ loading: false, error: 'Menyimpan...' }); try { const response = await fetch('http://localhost/proyek_undangan/api/save_guests.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invitation_id: invitationId, guests: guestList.map(g => g.guest_name) }) }); const result = await response.json(); if (result.status !== 'success') throw new Error(result.message); await fetchGuests(); setStatus({ loading: false, error: '' }); showToast(result.message || 'Daftar tamu diperbarui!'); } catch (error) { setStatus({ loading: false, error: error.message }); } }, [invitationId, fetchGuests, showToast]);
+    const handleFileImport = useCallback((event) => { const file = event.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const importedNames = results.data.map(row => row['Nama'] || row['nama'] || row['Name'] || row['name']).filter(Boolean); if (importedNames.length > 0) { const newGuestList = [...guests, ...importedNames.map(name => ({ guest_name: name }))]; const uniqueGuestList = Array.from(new Set(newGuestList.map(g => g.guest_name))).map(name => ({ guest_name: name })); handleSaveGuests(uniqueGuestList); } else { setStatus({ loading: false, error: 'File CSV tidak valid atau tidak memiliki kolom "Nama".' }); } }}); event.target.value = null; }, [guests, handleSaveGuests]);
+    const handleAddGuest = useCallback(() => { if (newGuest && !guests.find(g => g.guest_name.toLowerCase() === newGuest.toLowerCase())) { const updatedGuests = [...guests, { guest_name: newGuest.trim() }]; setNewGuest(''); handleSaveGuests(updatedGuests); } }, [newGuest, guests, handleSaveGuests]);
+    const handleRemoveGuest = useCallback((guestNameToRemove) => { if (window.confirm(`Yakin ingin menghapus tamu "${guestNameToRemove}"?`)) { const updatedGuests = guests.filter(g => g.guest_name !== guestNameToRemove); handleSaveGuests(updatedGuests); } }, [handleSaveGuests]);
+    const copyToClipboard = useCallback((text, message) => { navigator.clipboard.writeText(text).then(() => { showToast(message || 'Link berhasil disalin!'); }, () => { showToast('Gagal menyalin link.', 'error'); }); }, [showToast]);
+    const handleSelectGuest = (guestName) => { setSelectedGuests(prev => prev.includes(guestName) ? prev.filter(name => name !== guestName) : [...prev, guestName]); };
+    const handleSelectAll = (e) => { if (e.target.checked) { setSelectedGuests(guests.map(g => g.guest_name)); } else { setSelectedGuests([]); } };
+    const handleCopySelected = useCallback(() => { const baseUrl = `http://localhost/proyek_undangan/undangan.html?id=${invitationId}`; const textToCopy = selectedGuests.map(name => { const link = `${baseUrl}&to=${encodeURIComponent(name.replace(/\s/g, '+'))}`; return `${name}\n${link}`; }).join('\n\n'); if (textToCopy) { copyToClipboard(textToCopy, `${selectedGuests.length} link berhasil disalin!`); } }, [selectedGuests, invitationId, copyToClipboard]);
+    
+    if (!isOpen) return null;
+    const modalBackdropStyle = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
+    const modalContentStyle = { backgroundColor: 'white', padding: '25px', borderRadius: '8px', width: '90%', maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' };
+    const closeButtonStyle = { padding: '8px 16px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '20px', alignSelf: 'flex-end' };
+    const tableHeaderStyle = { padding: '10px', border: '1px solid #ddd', textAlign: 'left', backgroundColor: '#f2f2f2' };
+    const tableCellStyle = { padding: '10px', border: '1px solid #ddd', verticalAlign: 'middle' };
+
+    return ( <div style={modalBackdropStyle} onClick={onClose}><div style={modalContentStyle} onClick={e => e.stopPropagation()}><h2 style={{marginTop: 0}}>Daftar Tamu</h2><p style={{marginTop: 0, marginBottom: '20px', color: '#555'}}>Untuk: <strong>{invitationTitle}</strong></p><div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}><input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileImport} /><button onClick={() => fileInputRef.current.click()} style={{padding: '8px 12px', cursor: 'pointer'}}>Impor CSV</button><input type="text" value={newGuest} onChange={(e) => setNewGuest(e.target.value)} placeholder="Nama Tamu Baru" style={{flex: 1, padding: '8px', minWidth: '200px'}} onKeyPress={(e) => e.key === 'Enter' && handleAddGuest()} /><button onClick={handleAddGuest} style={{padding: '8px 12px', cursor: 'pointer'}}>Tambah</button><button onClick={handleCopySelected} disabled={selectedGuests.length === 0} style={{padding: '8px 12px', cursor: 'pointer', marginLeft: 'auto', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', opacity: selectedGuests.length === 0 ? 0.5 : 1}}>Salin {selectedGuests.length > 0 ? selectedGuests.length : ''} Link</button></div>{status.error && <p style={{color: 'red', textAlign: 'center'}}>{status.error}</p>}<div style={{overflowY: 'auto', flex: 1}}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={{...tableHeaderStyle, width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={guests.length > 0 && selectedGuests.length === guests.length} /></th><th style={tableHeaderStyle}>Nama Tamu</th><th style={tableHeaderStyle}>Aksi</th></tr></thead><tbody>{status.loading ? (<tr><td colSpan="3" style={{textAlign: 'center', padding: '20px'}}>Memuat...</td></tr>) : guests.length > 0 ? (guests.map((guest, index) => (<tr key={index}><td style={tableCellStyle}><input type="checkbox" checked={selectedGuests.includes(guest.guest_name)} onChange={() => handleSelectGuest(guest.guest_name)} /></td><td style={tableCellStyle}>{guest.guest_name}</td><td style={tableCellStyle}><button onClick={() => copyToClipboard(`${baseUrl}&to=${encodeURIComponent(guest.guest_name.replace(/\s/g, '+'))}`)}>Salin</button><button onClick={() => handleRemoveGuest(guest.guest_name)} style={{backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginLeft: '10px'}}>Hapus</button></td></tr>))) : (<tr><td colSpan="3" style={{textAlign: 'center', padding: '20px'}}>Belum ada daftar tamu.</td></tr>)}</tbody></table></div><button onClick={onClose} style={closeButtonStyle}>Tutup</button></div></div> );
+};
+
+const SortableItem = (props) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({id: props.id});
+    const style = { transform: CSS.Transform.toString(transform), transition, padding: '10px', margin: '0 0 8px 0', backgroundColor: '#f9f9f9', border: '1px solid #ddd', borderRadius: '4px', display: 'flex', alignItems: 'center', cursor: 'grab' };
+    return (<div ref={setNodeRef} style={style} {...attributes} {...listeners}><i className="fas fa-grip-vertical" style={{ marginRight: '10px', color: '#aaa' }}></i>{props.children}</div>);
+};
+
+const LayoutEditor = ({ layout, setLayout, allComponents }) => {
+    const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, }));
+    function handleDragEnd(event) { const {active, over} = event; if (active.id !== over.id) { setLayout((items) => { const oldIndex = items.indexOf(active.id); const newIndex = items.indexOf(over.id); return arrayMove(items, oldIndex, newIndex); }); } }
+    return ( <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={layout} strategy={verticalListSortingStrategy}><div style={{ border: '1px solid #eee', padding: '10px', borderRadius: '5px' }}>{layout.map(id => <SortableItem key={id} id={id} allComponents={allComponents}/>)}</div></SortableContext></DndContext> );
+};
+
+const templates = { classic: { name: 'Classic Elegant', layout: ['mempelai', 'acara', 'cerita', 'galeri', 'hadiah', 'rsvp', 'penutup'] }, modern: { name: 'Modern Minimalist', layout: ['mempelai', 'acara', 'galeri', 'rsvp', 'hadiah', 'penutup'] }, simple: { name: 'Simple & Sweet', layout: ['mempelai', 'acara', 'rsvp', 'penutup'] } };
+const allComponents = { mempelai: 'Profil Mempelai', acara: 'Detail Acara & Countdown', cerita: 'Cerita Cinta', galeri: 'Galeri Foto & Video', hadiah: 'Amplop Digital', rsvp: 'Ucapan & RSVP', penutup: 'Salam Penutup' };
+const defaultInvitationState = { title: '', template_id: 'classic', layout_data: templates.classic.layout, cover_image: [], couple: { groom: { name: '', nick: '', father: '', mother: '', photo: '' }, bride: { name: '', nick: '', father: '', mother: '', photo: '' } }, events: [{ type: 'Akad Nikah', date: '', time: '', venue: '', mapLink: '' }], gifts: [{ bank: 'BCA', number: '', name: '' }], gallery: [], story: '', music_url: '', export_token: '' };
+
 export default function Dashboard({ handleLogout }) {
     const [invitation, setInvitation] = useState(defaultInvitationState);
     const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
     const [invitations, setInvitations] = useState([]);
     const [editingId, setEditingId] = useState(null);
-
-    // Fungsi untuk mengambil semua data undangan dari API
-    const fetchInvitations = async () => {
-        try {
-            const API_URL = 'http://localhost/proyek_undangan/api/get_invitations.php';
-            const response = await fetch(API_URL, { credentials: 'include' });
-            if (!response.ok) {
-                const errorResult = await response.json().catch(() => ({ message: 'Gagal mengambil daftar undangan.' }));
-                throw new Error(errorResult.message);
-            }
-            const data = await response.json();
-            setInvitations(data);
-        } catch (error) {
-            setStatusMessage({ type: 'error', text: error.message });
-        }
-    };
-
-    useEffect(() => {
-        fetchInvitations();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+    const [currentInvitation, setCurrentInvitation] = useState(null);
+    const [currentRsvps, setCurrentRsvps] = useState([]);
+    const [currentInvitationTitle, setCurrentInvitationTitle] = useState('');
+    const [isUploading, setIsUploading] = useState({ gallery: false, cover: false, groom: false, bride: false, music: false });
+    const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+    
+    const showToast = useCallback((message, type = 'success') => {
+        setToast({ show: true, message, type });
+        setTimeout(() => {
+            setToast({ show: false, message: '', type });
+        }, 3000);
     }, []);
 
-    // Fungsi untuk menangani simpan data baru atau update data lama
-    const handleSaveOrUpdate = async (e) => {
-        e.preventDefault();
-        
-        // Saring semua data array yang kosong sebelum menyimpan
-        const filteredEvents = invitation.events.filter(event => event.type && event.type.trim() !== '' && event.date && event.date.trim() !== '');
-        const filteredGifts = invitation.gifts.filter(gift => gift.bank && gift.bank.trim() !== '' && gift.number && gift.number.trim() !== '');
-        const filteredGallery = invitation.gallery.filter(url => url && url.trim() !== '');
+    const copyToClipboard = useCallback((text, message) => {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(message || 'Teks berhasil disalin!');
+        }, () => {
+            showToast('Gagal menyalin.', 'error');
+        });
+    }, [showToast]);
 
-        const dataToSave = { ...invitation, events: filteredEvents, gifts: filteredGifts, gallery: filteredGallery };
-        
-        const isEditing = editingId !== null;
-        const API_URL = isEditing ? 'http://localhost/proyek_undangan/api/update_invitation.php' : 'http://localhost/proyek_undangan/api/save_invitation.php';
-        setStatusMessage({ type: 'loading', text: isEditing ? 'Memperbarui...' : 'Menyimpan...' });
-        
-        const payload = isEditing ? { ...dataToSave, id: editingId } : dataToSave;
-
-        try {
-            const response = await fetch(API_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const result = await response.json();
-            if (result.status === 'success') {
-                setStatusMessage({ type: 'success', text: result.message });
-                setInvitation(defaultInvitationState);
-                setEditingId(null);
-                fetchInvitations();
-            } else { throw new Error(result.message); }
-        } catch (error) {
-            setStatusMessage({ type: 'error', text: error.message });
-        }
-    };
-
-    const handleDelete = async (id) => { if (window.confirm(`Apakah Anda yakin ingin menghapus undangan dengan ID: ${id}?`)) { try { const API_URL = 'http://localhost/proyek_undangan/api/delete_invitation.php'; const response = await fetch(API_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); const result = await response.json(); if (result.status === 'success') { setStatusMessage({ type: 'success', text: result.message }); fetchInvitations(); } else { throw new Error(result.message); } } catch (error) { setStatusMessage({ type: 'error', text: `Gagal menghapus: ${error.message}` }); } } };
+    const openGuestModal = (invitation) => { setCurrentInvitation(invitation); setIsGuestModalOpen(true); };
     
-    // handleEdit sekarang juga mengisi semua state
-    const handleEdit = (id) => {
-        const invitationToEdit = invitations.find(inv => inv.id === id);
-        if (invitationToEdit) {
-            const formState = { 
-                ...defaultInvitationState, 
-                title: invitationToEdit.title, 
-                template: invitationToEdit.template_id, 
-                story: invitationToEdit.story, 
-                couple: invitationToEdit.couple_data || defaultInvitationState.couple, 
-                events: invitationToEdit.event_data && invitationToEdit.event_data.length > 0 ? invitationToEdit.event_data : defaultInvitationState.events, 
-                gifts: invitationToEdit.gift_data && invitationToEdit.gift_data.length > 0 ? invitationToEdit.gift_data : defaultInvitationState.gifts,
-                gallery: invitationToEdit.gallery_data && invitationToEdit.gallery_data.length > 0 ? invitationToEdit.gallery_data : defaultInvitationState.gallery,
-            };
-            setInvitation(formState);
-            setEditingId(id);
-            window.scrollTo(0, 0);
-        }
-    };
-
+    const fetchInvitations = useCallback(async () => { try { const API_URL = 'http://localhost/proyek_undangan/api/get_invitations.php'; const response = await fetch(API_URL, { credentials: 'include' }); if (!response.ok) { throw new Error('Gagal mengambil daftar undangan.'); } const data = await response.json(); setInvitations(data); } catch (error) { setStatusMessage({ type: 'error', text: error.message }); } }, []);
+    
+    useEffect(() => {
+        fetchInvitations();
+    }, [fetchInvitations]);
+    
+    const handleShowRsvps = async (id, inv) => { setIsModalOpen(true); setCurrentInvitationTitle(inv.title); setCurrentInvitation(inv); try { const API_URL = `http://localhost/proyek_undangan/api/get_rsvps.php?id=${id}`; const response = await fetch(API_URL, {credentials: 'include'}); if (!response.ok) { throw new Error('Gagal memuat RSVP'); } const data = await response.json(); setCurrentRsvps(data); } catch (error) { setCurrentRsvps([]); } };
+    const handleSaveOrUpdate = async (e) => { e.preventDefault(); const filteredEvents = (invitation.events || []).filter(event => event.type && event.date); const filteredGifts = (invitation.gifts || []).filter(gift => gift.bank && gift.number); const dataToSave = { ...invitation, events: filteredEvents, gifts: filteredGifts }; const isEditing = editingId !== null; const API_URL = isEditing ? 'http://localhost/proyek_undangan/api/update_invitation.php' : 'http://localhost/proyek_undangan/api/save_invitation.php'; setStatusMessage({ type: 'loading', text: isEditing ? 'Memperbarui...' : 'Menyimpan...' }); const payload = isEditing ? { ...dataToSave, id: editingId } : dataToSave; try { const response = await fetch(API_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) { const errorResult = await response.json().catch(() => ({ message: `Server error: ${response.status} ${response.statusText}` })); throw new Error(errorResult.message); } const result = await response.json(); if (result.status === 'success') { setStatusMessage({ type: 'success', text: result.message }); setInvitation(defaultInvitationState); setEditingId(null); fetchInvitations(); } else { throw new Error(result.message || 'Terjadi kesalahan yang tidak diketahui.'); } } catch (error) { console.error("Save/Update Error:", error); setStatusMessage({ type: 'error', text: error.message }); } };
+    const handleDelete = async (id) => { if (window.confirm(`Yakin ingin menghapus undangan ID: ${id}?`)) { try { const API_URL = 'http://localhost/proyek_undangan/api/delete_invitation.php'; const response = await fetch(API_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); const result = await response.json(); if (result.status === 'success') { setStatusMessage({ type: 'success', text: result.message }); fetchInvitations(); } else { throw new Error(result.message); } } catch (error) { setStatusMessage({ type: 'error', text: `Gagal menghapus: ${error.message}` }); } } };
+    const handleEdit = (id) => { const item = invitations.find(i => i.id === id); if(item) { setInvitation({ ...defaultInvitationState, ...item, couple: item.couple_data || defaultInvitationState.couple, events: item.event_data && item.event_data.length > 0 ? item.event_data : defaultInvitationState.events, gifts: item.gift_data && item.gift_data.length > 0 ? item.gift_data : defaultInvitationState.gifts, gallery: item.gallery_data || [], cover_image: item.cover_image || [], music_url: item.music_url || '', template_id: item.template_id || 'classic', layout_data: item.layout_data && item.layout_data.length > 0 ? item.layout_data : templates[item.template_id]?.layout || templates.classic.layout, export_token: item.export_token || '' }); setEditingId(id); window.scrollTo(0,0); }};
     const handleCancelEdit = () => { setInvitation(defaultInvitationState); setEditingId(null); setStatusMessage({ type: '', text: '' }); };
-    const handleChange = (e) => { const { name, value } = e.target; const keys = name.split('.'); if (keys.length > 1) { setInvitation(prev => { const newState = JSON.parse(JSON.stringify(prev)); let current = newState; for (let i = 0; i < keys.length - 1; i++) { current[keys[i]] = current[keys[i]] || {}; current = current[keys[i]]; } current[keys[keys.length - 1]] = value; return newState; }); } else { setInvitation(prev => ({ ...prev, [name]: value })); } };
-    const handleEventChange = (index, field, value) => { const newEvents = [...(invitation.events || [])]; newEvents[index][field] = value; setInvitation(prev => ({...prev, events: newEvents})); };
+    const handleChange = (e) => { const { name, value } = e.target; setInvitation(prev => ({ ...prev, [name]: value })); };
+    const handleTemplateChange = (e) => { const templateId = e.target.value; const newLayout = templates[templateId]?.layout || templates.classic.layout; setInvitation(prev => ({ ...prev, template_id: templateId, layout_data: newLayout })); };
+    const setLayoutData = (newLayout) => { setInvitation(prev => ({ ...prev, layout_data: newLayout })); };
+    const handleEventChange = (index, field, value) => { const newEvents = [...(invitation.events || [])]; newEvents[index] = { ...newEvents[index], [field]: value }; setInvitation(prev => ({...prev, events: newEvents})); };
     const addEvent = () => { setInvitation(prev => ({ ...prev, events: [...(prev.events || []), { type: 'Resepsi', date: '', time: '', venue: '', mapLink: '' }] })); };
-    const removeEvent = (index) => { if (invitation.events.length > 1) { if (window.confirm('Hapus blok acara ini?')) { const newEvents = invitation.events.filter((_, i) => i !== index); setInvitation(prev => ({ ...prev, events: newEvents })); } } else { alert('Harus ada minimal satu blok acara.'); } };
-    const handleGiftChange = (index, field, value) => { const newGifts = [...(invitation.gifts || [])]; newGifts[index][field] = value; setInvitation(prev => ({ ...prev, gifts: newGifts })); };
+    const removeEvent = (index) => { if ((invitation.events || []).length > 1 && window.confirm('Hapus acara ini?')) { setInvitation(prev => ({ ...prev, events: prev.events.filter((_, i) => i !== index) })); } };
+    const handleGiftChange = (index, field, value) => { const newGifts = [...(invitation.gifts || [])]; newGifts[index] = { ...newGifts[index], [field]: value }; setInvitation(prev => ({...prev, gifts: newGifts })); };
     const addGift = () => { setInvitation(prev => ({ ...prev, gifts: [...(prev.gifts || []), { bank: '', number: '', name: '' }] })); };
-    const removeGift = (index) => { if (window.confirm('Hapus rekening ini?')) { const newGifts = invitation.gifts.filter((_, i) => i !== index); setInvitation(prev => ({ ...prev, gifts: newGifts })); } };
-    const handleGalleryChange = (index, value) => { const newGallery = [...(invitation.gallery || [''])]; newGallery[index] = value; setInvitation(prev => ({ ...prev, gallery: newGallery })); };
-    const addGalleryPhoto = () => { setInvitation(prev => ({ ...prev, gallery: [...(prev.gallery || []), ''] })); };
-    const removeGalleryPhoto = (index) => { if (window.confirm('Hapus kolom foto ini?')) { const newGallery = invitation.gallery.filter((_, i) => i !== index); setInvitation(prev => ({ ...prev, gallery: newGallery.length > 0 ? newGallery : [''] })); } };
-
+    const removeGift = (index) => { if (window.confirm('Hapus rekening ini?')) { setInvitation(prev => ({...prev, gifts: prev.gifts.filter((_, i) => i !== index) })); } };
+    const createUploadHandler = (categoryKey, isMultiple = false) => async (e) => { const files = e.target.files; if (!files || !files.length) return; const uploadStateKey = categoryKey === 'cover_image' ? 'cover' : (categoryKey === 'gallery' ? 'gallery' : (categoryKey === 'music_url' ? 'music' : categoryKey)); setIsUploading(prev => ({ ...prev, [uploadStateKey]: true })); setStatusMessage({ type: 'loading', text: `Mengunggah...` }); const uploadPromises = Array.from(files).map(file => { const formData = new FormData(); formData.append('mediaFile', file); return fetch('http://localhost/proyek_undangan/api/upload_media.php', { method: 'POST', credentials: 'include', body: formData }).then(res => res.json()); }); try { const results = await Promise.all(uploadPromises); const successfulUploads = results.filter(res => res && res.status === 'success').map(res => res.url); if (successfulUploads.length > 0) { setInvitation(prev => { if (isMultiple) { return { ...prev, [categoryKey]: [...(prev[categoryKey] || []), ...successfulUploads] }; } else if (categoryKey === 'music_url') { return { ...prev, music_url: successfulUploads[0] }; } else { const newCoupleState = { ...prev.couple, [categoryKey]: { ...prev.couple[categoryKey], photo: successfulUploads[0] } }; return { ...prev, couple: newCoupleState }; } }); setStatusMessage({ type: 'success', text: 'Upload berhasil!' }); } const failedUploads = results.filter(res => !res || res.status !== 'success'); if (failedUploads.length > 0) { setStatusMessage({ type: 'error', text: `Gagal mengupload: ${failedUploads[0]?.message || 'Unknown error'}` }); } } catch (error) { setStatusMessage({ type: 'error', text: 'Kesalahan jaringan saat upload.' }); } finally { setIsUploading(prev => ({ ...prev, [uploadStateKey]: false })); } };
+    const removeMedia = (category, index) => { if(window.confirm(`Hapus media dari ${category}?`)) { setInvitation(prev => ({ ...prev, [category]: prev[category].filter((_, i) => i !== index) })); } };
+    const removeCouplePhoto = (groomOrBride) => { setInvitation(prev => ({ ...prev, couple: { ...prev.couple, [groomOrBride]: { ...prev.couple[groomOrBride], photo: '' } } })); };
+    const removeMusic = () => { setInvitation(prev => ({ ...prev, music_url: '' })); };
+    
     return (
         <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: '800px', margin: '2rem auto', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '1rem', marginBottom: '2rem' }}>
-                <h1 style={{ margin: 0 }}>Dashboard Admin</h1>
-                <button onClick={handleLogout} style={{ padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Logout</button>
-            </header>
-            
+            <Toast message={toast.message} show={toast.show} type={toast.type} />
+            <RsvpModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} rsvps={currentRsvps} invitationTitle={currentInvitationTitle} invitationId={currentInvitation?.id} />
+            <GuestListModal isOpen={isGuestModalOpen} onClose={() => setIsGuestModalOpen(false)} invitationId={currentInvitation?.id} invitationTitle={currentInvitation?.title} showToast={showToast} />
+            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '1rem', marginBottom: '2rem' }}><h1 style={{ margin: 0 }}>Dashboard Admin</h1><button onClick={handleLogout} style={{ padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Logout</button></header>
             <h2 style={{ textAlign: 'center', color: '#333' }}>{editingId ? `Edit Undangan (ID: ${editingId})` : 'Buat Undangan Baru'}</h2>
-            
             {statusMessage.text && ( <div style={{ padding: '1rem', margin: '1rem 0', borderRadius: '5px', color: 'white', backgroundColor: statusMessage.type === 'success' ? '#28a745' : statusMessage.type === 'error' ? '#dc3545' : '#6c757d' }}>{statusMessage.text}</div> )}
-            
             <form onSubmit={handleSaveOrUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', border: '1px solid #ddd', padding: '1.5rem', borderRadius: '5px', backgroundColor: 'white' }}>
-                 <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}>
-                    <legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Informasi Dasar</legend>
-                    <InputField label="Judul Undangan:" type="text" name="title" value={invitation.title || ''} onChange={handleChange} required />
-                </fieldset>
-
-                 <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}>
-                    <legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Informasi Mempelai</legend>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                        <div>
-                            <h4 style={{marginTop: 0, borderBottom: '1px solid #ddd', paddingBottom: '0.5rem'}}>Mempelai Pria</h4>
-                            <InputField label="Nama Lengkap:" type="text" name="couple.groom.name" value={invitation.couple?.groom?.name || ''} onChange={handleChange} />
-                            <InputField label="Nama Panggilan:" type="text" name="couple.groom.nick" value={invitation.couple?.groom?.nick || ''} onChange={handleChange} />
-                            <InputField label="Nama Ayah:" type="text" name="couple.groom.father" value={invitation.couple?.groom?.father || ''} onChange={handleChange} />
-                            <InputField label="Nama Ibu:" type="text" name="couple.groom.mother" value={invitation.couple?.groom?.mother || ''} onChange={handleChange} />
-                        </div>
-                        <div>
-                            <h4 style={{marginTop: 0, borderBottom: '1px solid #ddd', paddingBottom: '0.5rem'}}>Mempelai Wanita</h4>
-                            <InputField label="Nama Lengkap:" type="text" name="couple.bride.name" value={invitation.couple?.bride?.name || ''} onChange={handleChange} />
-                            <InputField label="Nama Panggilan:" type="text" name="couple.bride.nick" value={invitation.couple?.bride?.nick || ''} onChange={handleChange} />
-                            <InputField label="Nama Ayah:" type="text" name="couple.bride.father" value={invitation.couple?.bride?.father || ''} onChange={handleChange} />
-                            <InputField label="Nama Ibu:" type="text" name="couple.bride.mother" value={invitation.couple?.bride?.mother || ''} onChange={handleChange} />
-                        </div>
-                    </div>
-                </fieldset>
-
-                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}>
-                    <legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Detail Acara</legend>
-                    {invitation.events && invitation.events.map((event, index) => (
-                        <div key={index} style={{border: '1px dashed #ccc', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', position: 'relative'}}>
-                             <button type="button" onClick={() => removeEvent(index)} style={{position: 'absolute', top: '10px', right: '10px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer', lineHeight: '25px', fontWeight: 'bold', fontSize: '14px'}}>✖</button>
-                            <InputField label={`Jenis Acara ${index+1}`} type="text" value={event.type || ''} onChange={(e) => handleEventChange(index, 'type', e.target.value)} />
-                            <InputField label="Tanggal" type="date" value={event.date || ''} onChange={(e) => handleEventChange(index, 'date', e.target.value)} />
-                            <InputField label="Waktu" type="text" placeholder="Contoh: 09:00 - 11:00" value={event.time || ''} onChange={(e) => handleEventChange(index, 'time', e.target.value)} />
-                            <InputField label="Nama Tempat" type="text" value={event.venue || ''} onChange={(e) => handleEventChange(index, 'venue', e.target.value)} />
-                            <InputField label="Link Google Maps" type="text" value={event.mapLink || ''} onChange={(e) => handleEventChange(index, 'mapLink', e.target.value)} />
-                        </div>
-                    ))}
-                    <button type="button" onClick={addEvent} style={{padding: '0.5rem 1rem', border: '1px solid #007bff', backgroundColor: 'white', color: '#007bff', borderRadius: '4px', cursor: 'pointer'}}>+ Tambah Acara</button>
-                </fieldset>
-                
-                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}>
-                    <legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Amplop Digital / Hadiah</legend>
-                    {invitation.gifts && invitation.gifts.map((gift, index) => (
-                        <div key={index} style={{border: '1px dashed #ccc', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', position: 'relative'}}>
-                            {invitation.gifts.length > 0 && ( <button type="button" onClick={() => removeGift(index)} style={{position: 'absolute', top: '5px', right: '5px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', lineHeight: '20px', fontSize: '12px'}}>✖</button> )}
-                            <InputField label={`Tipe Hadiah ${index+1}`} type="text" placeholder="Contoh: Bank BCA / GoPay" value={gift.bank || ''} onChange={(e) => handleGiftChange(index, 'bank', e.target.value)} />
-                            <InputField label="Nomor Rekening / Telp" type="text" placeholder="Contoh: 1234567890" value={gift.number || ''} onChange={(e) => handleGiftChange(index, 'number', e.target.value)} />
-                            <InputField label="Atas Nama" type="text" placeholder="Contoh: Budi Santoso" value={gift.name || ''} onChange={(e) => handleGiftChange(index, 'name', e.target.value)} />
-                        </div>
-                    ))}
-                    <button type="button" onClick={addGift} style={{padding: '0.5rem 1rem', border: '1px solid #28a745', backgroundColor: 'white', color: '#28a745', borderRadius: '4px', cursor: 'pointer'}}>+ Tambah Hadiah</button>
-                </fieldset>
-                
-                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}>
-                    <legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Galeri Foto</legend>
-                    <p style={{fontSize: '0.9rem', color: '#666', marginBottom: '1rem'}}>Masukkan URL gambar secara langsung. Contoh: https://i.imgur.com/namafile.jpg</p>
-                    {invitation.gallery && invitation.gallery.map((url, index) => (
-                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                            <InputField label={`URL Foto ${index + 1}:`} type="text" placeholder="https://..." value={url} onChange={(e) => handleGalleryChange(index, e.target.value)} />
-                            <button type="button" onClick={() => removeGalleryPhoto(index)} style={{ padding: '8px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', height: '38px' }}>Hapus</button>
-                        </div>
-                    ))}
-                    <button type="button" onClick={addGalleryPhoto} style={{padding: '0.5rem 1rem', border: '1px solid #17a2b8', backgroundColor: 'white', color: '#17a2b8', borderRadius: '4px', cursor: 'pointer'}}>+ Tambah Foto</button>
-                </fieldset>
-
-                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}>
-                    <legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Konten Tambahan</legend>
-                    <TextAreaField label="Cerita Cinta:" name="story" value={invitation.story || ''} onChange={handleChange} />
-                </fieldset>
-                
-                <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
-                    <button type="submit" style={{ flex: 1, padding: '0.8rem', backgroundColor: editingId ? '#007bff' : '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }} disabled={statusMessage.type === 'loading'}>{editingId ? 'Update Undangan' : 'Simpan Undangan Baru'}</button>
-                    {editingId && ( <button type="button" onClick={handleCancelEdit} style={{ padding: '0.8rem', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Batal Edit</button> )}
-                </div>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Pengaturan Utama</legend><InputField label="Judul Undangan:" type="text" name="title" value={invitation.title || ''} onChange={handleChange} required /><SelectField label="Pilih Tema Undangan:" name="template_id" value={invitation.template_id} onChange={handleTemplateChange}>{Object.keys(templates).map(key => (<option key={key} value={key}>{templates[key].name}</option>))}</SelectField></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Tata Letak Halaman (Drag & Drop)</legend><p style={{fontSize: '0.9rem', color: '#666', marginBottom: '1rem'}}>Seret untuk mengubah urutan bagian pada halaman undangan Anda.</p><LayoutEditor layout={invitation.layout_data || []} setLayout={setLayoutData} allComponents={allComponents} /></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Foto Sampul (Cover Slideshow)</legend><ImageUploader label="Upload Foto untuk Cover" onUpload={createUploadHandler('cover_image', true)} isUploading={isUploading.cover} multiple={true} accept="image/*"/><div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>{Array.isArray(invitation.cover_image) && invitation.cover_image.map((url, index) => (<MediaPreview key={index} url={url} onRemove={() => removeMedia('cover_image', index)} />))}</div></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Informasi Mempelai</legend><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}><div><h4 style={{marginTop: 0, borderBottom: '1px solid #ddd', paddingBottom: '0.5rem'}}>Mempelai Pria</h4><ImageUploader label="Foto Mempelai Pria" onUpload={createUploadHandler('groom')} isUploading={isUploading.groom} currentImage={invitation.couple?.groom?.photo} onRemove={() => removeCouplePhoto('groom')}/><InputField label="Nama Lengkap:" type="text" name="couple.groom.name" value={invitation.couple?.groom?.name || ''} onChange={handleChange} /><InputField label="Nama Panggilan:" type="text" name="couple.groom.nick" value={invitation.couple?.groom?.nick || ''} onChange={handleChange} /><InputField label="Nama Ayah:" type="text" name="couple.groom.father" value={invitation.couple?.groom?.father || ''} onChange={handleChange} /><InputField label="Nama Ibu:" type="text" name="couple.groom.mother" value={invitation.couple?.groom?.mother || ''} onChange={handleChange} /></div><div><h4 style={{marginTop: 0, borderBottom: '1px solid #ddd', paddingBottom: '0.5rem'}}>Mempelai Wanita</h4><ImageUploader label="Foto Mempelai Wanita" onUpload={createUploadHandler('bride')} isUploading={isUploading.bride} currentImage={invitation.couple?.bride?.photo} onRemove={() => removeCouplePhoto('bride')} /><InputField label="Nama Lengkap:" type="text" name="couple.bride.name" value={invitation.couple?.bride?.name || ''} onChange={handleChange} /><InputField label="Nama Panggilan:" type="text" name="couple.bride.nick" value={invitation.couple?.bride?.nick || ''} onChange={handleChange} /><InputField label="Nama Ayah:" type="text" name="couple.bride.father" value={invitation.couple?.bride?.father || ''} onChange={handleChange} /><InputField label="Nama Ibu:" type="text" name="couple.bride.mother" value={invitation.couple?.bride?.mother || ''} onChange={handleChange} /></div></div></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Detail Acara</legend>{(invitation.events || []).map((event, index) => (<div key={index} style={{border: '1px dashed #ccc', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', position: 'relative'}}><button type="button" onClick={() => removeEvent(index)} style={{position: 'absolute', top: '10px', right: '10px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>✖</button><InputField label={`Jenis Acara ${index+1}`} type="text" value={event.type || ''} onChange={(e) => handleEventChange(index, 'type', e.target.value)} /><InputField label="Tanggal" type="date" value={event.date || ''} onChange={(e) => handleEventChange(index, 'date', e.target.value)} /><InputField label="Waktu" type="text" placeholder="Contoh: 09:00" value={event.time || ''} onChange={(e) => handleEventChange(index, 'time', e.target.value)} /><InputField label="Nama Tempat" type="text" value={event.venue || ''} onChange={(e) => handleEventChange(index, 'venue', e.target.value)} /><InputField label="Link Google Maps" type="text" value={event.mapLink || ''} onChange={(e) => handleEventChange(index, 'mapLink', e.target.value)} /></div>))}<button type="button" onClick={addEvent} style={{padding: '0.5rem 1rem', border: '1px solid #007bff', backgroundColor: 'white', color: '#007bff', borderRadius: '4px', cursor: 'pointer'}}>+ Tambah Acara</button></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Musik Latar</legend><ImageUploader label="Upload Musik (MP3, WAV)" onUpload={createUploadHandler('music_url')} isUploading={isUploading.music} accept="audio/mpeg,audio/wav,audio/ogg"/><div style={{marginTop: '10px'}}>{invitation.music_url && <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}><audio src={invitation.music_url} controls style={{height: '40px'}}></audio><button type="button" onClick={removeMusic} style={{padding: '5px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>✖</button></div>}</div></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Amplop Digital</legend>{(invitation.gifts || []).map((gift, index) => (<div key={index} style={{border: '1px dashed #ccc', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', position: 'relative'}}><button type="button" onClick={() => removeGift(index)} style={{position: 'absolute', top: '5px', right: '5px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer'}}>✖</button><InputField label={`Tipe Hadiah ${index+1}`} type="text" placeholder="Contoh: Bank BCA" value={gift.bank || ''} onChange={(e) => handleGiftChange(index, 'bank', e.target.value)} /><InputField label="Nomor Rekening" type="text" placeholder="1234567890" value={gift.number || ''} onChange={(e) => handleGiftChange(index, 'number', e.target.value)} /><InputField label="Atas Nama" type="text" placeholder="Budi Santoso" value={gift.name || ''} onChange={(e) => handleGiftChange(index, 'name', e.target.value)} /></div>))}<button type="button" onClick={addGift} style={{padding: '0.5rem 1rem', border: '1px solid #28a745', backgroundColor: 'white', color: '#28a745', borderRadius: '4px', cursor: 'pointer'}}>+ Tambah Hadiah</button></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Galeri Foto & Video</legend><ImageUploader label="Upload Media untuk Galeri" onUpload={createUploadHandler('gallery', true)} isUploading={isUploading.gallery} multiple={true} accept="image/*,video/mp4,video/webm"/><div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>{(invitation.gallery || []).map((url, index) => (<MediaPreview key={index} url={url} onRemove={() => removeMedia('gallery', index)} />))}</div></fieldset>
+                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Konten Tambahan</legend><TextAreaField label="Cerita Cinta:" name="story" value={invitation.story || ''} onChange={handleChange} /></fieldset>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}><button type="submit" style={{ flex: 1, padding: '0.8rem', backgroundColor: editingId ? '#007bff' : '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }} disabled={Object.values(isUploading).some(s => s) || statusMessage.type === 'loading'}>{editingId ? 'Update Undangan' : 'Simpan Undangan Baru'}</button>{editingId && ( <button type="button" onClick={handleCancelEdit} style={{ padding: '0.8rem', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Batal Edit</button> )}</div>
             </form>
-
-            <div style={{ marginTop: '3rem', borderTop: '2px solid #ddd', paddingTop: '2rem' }}>
-                <h2 style={{ textAlign: 'center' }}>Daftar Undangan Tersimpan</h2>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem', backgroundColor: 'white' }}>
-                    <thead>
-                        <tr>
-                            <th style={{ padding: '10px', border: '1px solid #ddd' }}>ID</th>
-                            <th style={{ padding: '10px', border: '1px solid #ddd' }}>Judul Undangan</th>
-                            <th style={{ padding: '10px', border: '1px solid #ddd' }}>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {invitations.length > 0 ? (
-                            invitations.map(inv => (
-                                <tr key={inv.id}>
-                                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{inv.id}</td>
-                                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{inv.title}</td>
-                                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>
-                                        <button onClick={() => handleEdit(inv.id)} style={{ marginRight: '5px', padding: '5px 10px', backgroundColor: '#ffc107', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
-                                        <button onClick={() => handleDelete(inv.id)} style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Hapus</button>
-                                    </td>
-                                </tr>
-                            ))
-                        ) : (
-                            <tr><td colSpan="3" style={{ padding: '10px', textAlign: 'center' }}>{statusMessage.type === 'error' ? statusMessage.text : 'Memuat data...'}</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <div style={{ marginTop: '3rem', borderTop: '2px solid #ddd', paddingTop: '2rem' }}><h2 style={{ textAlign: 'center' }}>Daftar Undangan Tersimpan</h2><table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem', backgroundColor: 'white' }}><thead><tr><th style={{ padding: '10px', border: '1px solid #ddd' }}>ID</th><th style={{ padding: '10px', border: '1px solid #ddd' }}>Judul</th><th style={{ padding: '10px', border: '1px solid #ddd' }}>Aksi</th></tr></thead><tbody>{invitations.length > 0 ? ( invitations.map(inv => (<tr key={inv.id}><td style={{ padding: '10px', border: '1px solid #ddd' }}>{inv.id}</td><td style={{ padding: '10px', border: '1px solid #ddd' }}>{inv.title}</td><td style={{ padding: '10px', border: '1px solid #ddd', display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}><button onClick={() => openGuestModal(inv)}>Daftar Tamu</button><button onClick={() => handleShowRsvps(inv.id, inv)}>RSVP</button>{inv.export_token && (<button onClick={() => { const url = `http://localhost/proyek_undangan/api/export_rsvps_public.php?id=${inv.id}&token=${inv.export_token}`; copyToClipboard(url, 'Link ekspor real-time berhasil disalin!'); }} style={{ backgroundColor: '#fd7e14', color: 'white' }}>Link Ekspor</button>)}<button onClick={() => handleEdit(inv.id)}>Edit</button><button onClick={() => handleDelete(inv.id)}>Hapus</button></td></tr>))) : ( <tr><td colSpan="3" style={{ padding: '10px', textAlign: 'center' }}>{statusMessage.type === 'error' ? statusMessage.text : 'Memuat data...'}</td></tr> )}</tbody></table></div>
         </div>
     );
 }

@@ -5,99 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Undangan Pernikahan</title>
     
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <meta property="og:title" content="The Wedding of ...">
+    <meta property="og:description" content="Kami mengundang Anda untuk menghadiri hari bahagia kami.">
+    <meta property="og:image" content="[https://path.to/your/best-couple-photo.jpg](https://path.to/your/best-couple-photo.jpg)">
+    <meta property="og:url" content="[https://your-domain.com/undangan.html](https://your-domain.com/undangan.html)">
+    <meta property="og:type" content="website">
+
+    <link rel="preconnect" href="[https://fonts.googleapis.com](https://fonts.googleapis.com)">
+    <link rel="preconnect" href="[https://fonts.gstatic.com](https://fonts.gstatic.com)" crossorigin>
+    <link href="[https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lato:wght@400;700&display=swap](https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lato:wght@400;700&display=swap)" rel="stylesheet">
+    <link href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css)" rel="stylesheet">
     
-    <!-- Font Awesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" rel="stylesheet">
-    
-    <!-- Link ke File CSS Anda -->
+    <!-- CSS Dasar (Layout & Struktur) -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- File CSS Template akan ditambahkan di sini oleh script.js -->
 </head>
 <body>
-
-    <!-- Wadah untuk menampilkan pesan error jika ada -->
     <div id="error-container"></div>
-
-    <!-- Halaman Sampul (Landing Page) -->
     <div id="landing">
-        <h1 class="names-landing" id="landing-title"></h1>
-        <p class="guest-label">Kepada Yth: Bapak/Ibu/Saudara/i</p>
-        <p class="guest-name" id="guest-name-to">Tamu Undangan</p>
-        <button id="open-invitation" class="open-button"><i class="fa-regular fa-envelope"></i> Buka Undangan</button>
+        <div id="cover-slideshow-container"></div>
+        <div id="landing-content-wrapper">
+            <h1 class="names-landing" id="landing-title"></h1>
+            <p class="guest-label">Kepada Yth: Bapak/Ibu/Saudara/i</p>
+            <p class="guest-name" id="guest-name-to">Tamu Undangan</p>
+            <button id="open-invitation" class="open-button"><i class="fa-regular fa-envelope"></i> Buka Undangan</button>
+        </div>
     </div>
 
-    <!-- Konten Utama Undangan (Awalnya tersembunyi) -->
-    <div id="main-content">
-        
-        <section class="intro-section">
-            <h2 class="script-font animate-me fade-in-up">Maha Suci Allah</h2>
-            <p class="quote animate-me fade-in-up">Yang telah menciptakan makhluk-Nya berpasang-pasangan. Ya Allah, semoga ridho-Mu tercurah mengiringi pernikahan kami.</p>
-            <div class="profile-container">
-                <div class="profile-card animate-me zoom-in" style="transition-delay: 200ms;">
-                    <div class="profile-image"><img id="groom-photo" src="https://placehold.co/400x560/a29bfe/ffffff?text=Pria" alt="Foto Mempelai Pria"></div>
-                    <h3 class="profile-name" id="groom-nick">Mempelai Pria</h3>
-                    <p class="profile-fullname" id="groom-name">Nama Lengkap Pria</p>
-                    <p class="profile-parents">Putra dari Bapak <span id="groom-father">...</span> & Ibu <span id="groom-mother">...</span></p>
-                </div>
-                <div class="profile-card animate-me zoom-in" style="transition-delay: 350ms;">
-                    <div class="profile-image"><img id="bride-photo" src="https://placehold.co/400x560/a29bfe/ffffff?text=Wanita" alt="Foto Mempelai Wanita"></div>
-                    <h3 class="profile-name" id="bride-nick">Mempelai Wanita</h3>
-                    <p class="profile-fullname" id="bride-name">Nama Lengkap Wanita</p>
-                    <p class="profile-parents">Putri dari Bapak <span id="bride-father">...</span> & Ibu <span id="bride-mother">...</span></p>
-                </div>
-            </div>
-        </section>
+    <!-- Kontainer Lego yang Dinamis -->
+    <main id="main-content-lego"></main>
 
-        <section class="event-section">
-            <h2 class="script-font animate-me fade-in-up">Save The Date</h2>
-            <div id="countdown" class="countdown animate-me zoom-in"></div>
-            <p class="quote animate-me fade-in-up">Dengan memohon rahmat dan ridho Allah SWT, kami mengundang Bapak/Ibu/Saudara/i, untuk menghadiri acara pernikahan kami:</p>
-            <div id="event-container" class="event-container"></div>
-        </section>
-
-        <section class="story-section">
-            <h2 class="script-font animate-me fade-in-up">Kisah Perjalanan Cinta</h2>
-            <p id="story-content" class="story-text animate-me fade-in-up"></p>
-        </section>
-        
-        <section class="gallery-section">
-            <h2 class="script-font animate-me fade-in-up">Our Gallery</h2>
-            <div id="gallery-container" class="gallery">
-                <!-- Gambar placeholder untuk menunjukkan tampilan galeri -->
-                <img src="https://placehold.co/600x400/a29bfe/ffffff?text=Galeri+1" alt="Foto Galeri" onclick="showImage(this.src)" class="animate-me zoom-in">
-                <img src="https://placehold.co/600x400/74b9ff/ffffff?text=Galeri+2" alt="Foto Galeri" onclick="showImage(this.src)" class="animate-me zoom-in" style="transition-delay: 150ms;">
-                <img src="https://placehold.co/600x400/81ecec/ffffff?text=Galeri+3" alt="Foto Galeri" onclick="showImage(this.src)" class="animate-me zoom-in" style="transition-delay: 300ms;">
-            </div>
-        </section>
-
-        <section class="gift-rsvp-section">
-            <h2 class="script-font animate-me fade-in-up">Love Gift & RSVP</h2>
-            <p class="quote animate-me fade-in-up">Doa restu Anda merupakan karunia yang sangat berarti bagi kami. Dan jika memberi adalah ungkapan tanda kasih, Anda dapat memberi kado secara cashless.</p>
-            <div id="gift-container" class="gift-container"></div>
-            <div class="wishes-box animate-me zoom-in">
-                <h3 class="script-font">Ucapan Selamat & Do'a</h3>
-                <form class="wishes-form">
-                    <input type="text" id="guest-name" placeholder="Nama Anda" required>
-                    <textarea id="guest-wish" rows="4" placeholder="Tulis ucapan dan doa Anda..." required></textarea>
-                    <select id="attendance"><option value="Hadir">Konfirmasi: Hadir</option><option value="Tidak Hadir">Konfirmasi: Tidak Hadir</option></select>
-                    <button type="submit">KIRIM</button>
-                    <p id="rsvp-message"></p>
-                </form>
-                <div id="comment-list" class="comment-list"></div>
-            </div>
-        </section>
-
-        <footer class="closing">
-            <p class="animate-me fade-in-up">Merupakan suatu kehormatan...</p>
-            <h3 class="script-font animate-me fade-in-up">Terima Kasih</h3>
-            <h2 class="closing-names animate-me fade-in-up" id="closing-names">Mempelai & Mempelai</h2>
-        </footer>
-    </div>
-    
-    <audio id="bg-music" loop src="https://www.bensound.com/bensound-music/bensound-romantic.mp3"></audio>
+    <!-- Elemen Global -->
+    <audio id="bg-music" loop></audio>
     <button id="music-toggle-btn"><i class="fas fa-volume-high"></i></button>
     <div id="lightbox" onclick="this.classList.remove('active')"><img src="" alt="Gambar diperbesar"></div>
 
