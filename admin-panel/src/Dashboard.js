@@ -1,33 +1,22 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
-// =================================================================
-// === SEMUA KOMPONEN HELPER DIDEFINISIKAN DI LEVEL ATAS (GLOBAL) ===
-// =================================================================
-
+// --- Komponen-komponen UI Helper ---
 const Toast = ({ message, show, type = 'success' }) => {
     if (!show) return null;
     const style = {
-        position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
-        padding: '12px 20px', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-        color: 'white', backgroundColor: type === 'success' ? '#28a745' : '#dc3545',
-        zIndex: 2000, opacity: show ? 1 : 0, transition: 'opacity 0.3s ease-in-out, top 0.3s ease-in-out',
+        position: 'fixed',
+        top: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        padding: '12px 20px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        color: 'white',
+        backgroundColor: type === 'success' ? '#28a745' : '#dc3545',
+        zIndex: 2000,
+        opacity: show ? 1 : 0,
+        transition: 'opacity 0.3s ease-in-out, top 0.3s ease-in-out',
     };
     return <div style={style}>{message}</div>;
 };
@@ -71,79 +60,39 @@ const RsvpModal = ({ isOpen, onClose, rsvps, invitationTitle, invitationId }) =>
         </div>
     );
 };
-
 const MediaPreview = ({ url, onRemove }) => { const isVideo = ['.mp4', '.webm', '.ogg'].some(ext => url.toLowerCase().endsWith(ext)); return ( <div style={{ position: 'relative', width: '100px', height: '100px' }}><img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} /><button type="button" onClick={onRemove} style={{ position: 'absolute', top: '5px', right: '5px', background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', lineHeight: '18px', padding: 0 }}>✖</button></div> ); };
-
 const ImageUploader = ({ label, onUpload, isUploading, currentImage, onRemove, multiple = false, accept = "image/*" }) => { const fileInputRef = React.useRef(null); const handleButtonClick = () => fileInputRef.current.click(); return ( <div style={{ marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><button type="button" onClick={handleButtonClick} disabled={isUploading} style={{padding: '8px 12px', border: '1px solid #007bff', backgroundColor: 'white', color: '#007bff', borderRadius: '4px', cursor: 'pointer'}}>{isUploading ? 'Mengunggah...' : (currentImage ? 'Ganti' : 'Pilih File')}</button><input type="file" ref={fileInputRef} onChange={onUpload} disabled={isUploading} style={{ display: 'none' }} accept={accept} multiple={multiple} /></div> ); };
-
 const InputField = ({ label, ...props }) => (<label style={{ display: 'block', marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><input {...props} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }} /></label>);
 const TextAreaField = ({ label, ...props }) => (<label style={{ display: 'block', marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><textarea {...props} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', minHeight: '80px' }} /></label>);
 const SelectField = ({ label, children, ...props }) => (<label style={{ display: 'block', marginBottom: '1rem' }}><span style={{ display: 'block', marginBottom: '0.25rem', color: '#555', fontWeight: '500' }}>{label}</span><select {...props} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }}>{children}</select></label>);
 
 const GuestListModal = ({ isOpen, onClose, invitationId, invitationTitle, showToast }) => {
-    // PERBAIKAN: Hooks sekarang di level atas, di dalam komponennya sendiri
     const [guests, setGuests] = useState([]);
     const [status, setStatus] = useState({ loading: true, error: '' });
     const [newGuest, setNewGuest] = useState('');
     const fileInputRef = useRef(null);
     const [selectedGuests, setSelectedGuests] = useState([]);
-    
-    // PERBAIKAN: useCallback ditambahkan untuk fetchGuests, dan showToast disertakan sebagai dependensi
-    const fetchGuests = useCallback(async () => {
-        if (!invitationId) return;
-        setStatus({ loading: true, error: '' });
-        try {
-            const response = await fetch(`http://localhost/proyek_undangan/api/get_guests.php?invitation_id=${invitationId}`, { credentials: 'include' });
-            if (!response.ok) throw new Error('Gagal mengambil daftar tamu.');
-            const data = await response.json();
-            setGuests(data);
-        } catch (error) {
-            setStatus({ loading: false, error: error.message });
-        } finally {
-            setStatus({ loading: false, error: '' });
-        }
-    }, [invitationId]);
-    
-    useEffect(() => {
-        if (isOpen) {
-            fetchGuests();
-            setSelectedGuests([]);
-        }
-    }, [isOpen, invitationId, fetchGuests]);
-
-    const handleSaveGuests = useCallback(async (guestList) => { setStatus({ loading: false, error: 'Menyimpan...' }); try { const response = await fetch('http://localhost/proyek_undangan/api/save_guests.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invitation_id: invitationId, guests: guestList.map(g => g.guest_name) }) }); const result = await response.json(); if (result.status !== 'success') throw new Error(result.message); await fetchGuests(); setStatus({ loading: false, error: '' }); showToast(result.message || 'Daftar tamu diperbarui!'); } catch (error) { setStatus({ loading: false, error: error.message }); } }, [invitationId, fetchGuests, showToast]);
-    const handleFileImport = useCallback((event) => { const file = event.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const importedNames = results.data.map(row => row['Nama'] || row['nama'] || row['Name'] || row['name']).filter(Boolean); if (importedNames.length > 0) { const newGuestList = [...guests, ...importedNames.map(name => ({ guest_name: name }))]; const uniqueGuestList = Array.from(new Set(newGuestList.map(g => g.guest_name))).map(name => ({ guest_name: name })); handleSaveGuests(uniqueGuestList); } else { setStatus({ loading: false, error: 'File CSV tidak valid atau tidak memiliki kolom "Nama".' }); } }}); event.target.value = null; }, [guests, handleSaveGuests]);
-    const handleAddGuest = useCallback(() => { if (newGuest && !guests.find(g => g.guest_name.toLowerCase() === newGuest.toLowerCase())) { const updatedGuests = [...guests, { guest_name: newGuest.trim() }]; setNewGuest(''); handleSaveGuests(updatedGuests); } }, [newGuest, guests, handleSaveGuests]);
-    const handleRemoveGuest = useCallback((guestNameToRemove) => { if (window.confirm(`Yakin ingin menghapus tamu "${guestNameToRemove}"?`)) { const updatedGuests = guests.filter(g => g.guest_name !== guestNameToRemove); handleSaveGuests(updatedGuests); } }, [handleSaveGuests]);
-    const copyToClipboard = useCallback((text, message) => { navigator.clipboard.writeText(text).then(() => { showToast(message || 'Link berhasil disalin!'); }, () => { showToast('Gagal menyalin link.', 'error'); }); }, [showToast]);
+    const baseUrl = `http://localhost/proyek_undangan/undangan.html?id=${invitationId}`;
+    const fetchGuests = async () => { if (!invitationId) return; setStatus({ loading: true, error: '' }); try { const response = await fetch(`http://localhost/proyek_undangan/api/get_guests.php?invitation_id=${invitationId}`, { credentials: 'include' }); if (!response.ok) throw new Error('Gagal mengambil daftar tamu.'); const data = await response.json(); setGuests(data); } catch (error) { setStatus({ loading: false, error: error.message }); } finally { setStatus({ loading: false, error: '' }); } };
+    useEffect(() => { if (isOpen) { fetchGuests(); setSelectedGuests([]); } }, [isOpen, invitationId]);
+    const handleSaveGuests = async (guestList) => { setStatus({ loading: false, error: 'Menyimpan...' }); try { const response = await fetch('http://localhost/proyek_undangan/api/save_guests.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invitation_id: invitationId, guests: guestList.map(g => g.guest_name) }) }); const result = await response.json(); if (result.status !== 'success') throw new Error(result.message); await fetchGuests(); setStatus({ loading: false, error: '' }); showToast(result.message || 'Daftar tamu diperbarui!'); } catch (error) { setStatus({ loading: false, error: error.message }); } };
+    const handleFileImport = (event) => { const file = event.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const importedNames = results.data.map(row => row['Nama'] || row['nama'] || row['Name'] || row['name']).filter(Boolean); if (importedNames.length > 0) { const newGuestList = [...guests, ...importedNames.map(name => ({ guest_name: name }))]; const uniqueGuestList = Array.from(new Set(newGuestList.map(g => g.guest_name))).map(name => ({ guest_name: name })); handleSaveGuests(uniqueGuestList); } else { setStatus({ loading: false, error: 'File CSV tidak valid atau tidak memiliki kolom "Nama".' }); } }}); event.target.value = null; };
+    const handleAddGuest = () => { if (newGuest && !guests.find(g => g.guest_name.toLowerCase() === newGuest.toLowerCase())) { const updatedGuests = [...guests, { guest_name: newGuest.trim() }]; setNewGuest(''); handleSaveGuests(updatedGuests); } };
+    const handleRemoveGuest = (guestNameToRemove) => { if (window.confirm(`Yakin ingin menghapus tamu "${guestNameToRemove}"?`)) { const updatedGuests = guests.filter(g => g.guest_name !== guestNameToRemove); handleSaveGuests(updatedGuests); } };
+    const copyToClipboard = (text, message) => { navigator.clipboard.writeText(text).then(() => { showToast(message || 'Link berhasil disalin!'); }, () => { showToast('Gagal menyalin link.', 'error'); }); };
     const handleSelectGuest = (guestName) => { setSelectedGuests(prev => prev.includes(guestName) ? prev.filter(name => name !== guestName) : [...prev, guestName]); };
     const handleSelectAll = (e) => { if (e.target.checked) { setSelectedGuests(guests.map(g => g.guest_name)); } else { setSelectedGuests([]); } };
-    const handleCopySelected = useCallback(() => { const baseUrl = `http://localhost/proyek_undangan/undangan.html?id=${invitationId}`; const textToCopy = selectedGuests.map(name => { const link = `${baseUrl}&to=${encodeURIComponent(name.replace(/\s/g, '+'))}`; return `${name}\n${link}`; }).join('\n\n'); if (textToCopy) { copyToClipboard(textToCopy, `${selectedGuests.length} link berhasil disalin!`); } }, [selectedGuests, invitationId, copyToClipboard]);
-    
+    const handleCopySelected = () => { const textToCopy = selectedGuests.map(name => { const link = `${baseUrl}&to=${encodeURIComponent(name.replace(/\s/g, '+'))}`; return `${name}\n${link}`; }).join('\n\n'); if (textToCopy) { copyToClipboard(textToCopy, `${selectedGuests.length} link berhasil disalin!`); } };
     if (!isOpen) return null;
     const modalBackdropStyle = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
     const modalContentStyle = { backgroundColor: 'white', padding: '25px', borderRadius: '8px', width: '90%', maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' };
     const closeButtonStyle = { padding: '8px 16px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '20px', alignSelf: 'flex-end' };
     const tableHeaderStyle = { padding: '10px', border: '1px solid #ddd', textAlign: 'left', backgroundColor: '#f2f2f2' };
     const tableCellStyle = { padding: '10px', border: '1px solid #ddd', verticalAlign: 'middle' };
-
-    return ( <div style={modalBackdropStyle} onClick={onClose}><div style={modalContentStyle} onClick={e => e.stopPropagation()}><h2 style={{marginTop: 0}}>Daftar Tamu</h2><p style={{marginTop: 0, marginBottom: '20px', color: '#555'}}>Untuk: <strong>{invitationTitle}</strong></p><div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}><input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileImport} /><button onClick={() => fileInputRef.current.click()} style={{padding: '8px 12px', cursor: 'pointer'}}>Impor CSV</button><input type="text" value={newGuest} onChange={(e) => setNewGuest(e.target.value)} placeholder="Nama Tamu Baru" style={{flex: 1, padding: '8px', minWidth: '200px'}} onKeyPress={(e) => e.key === 'Enter' && handleAddGuest()} /><button onClick={handleAddGuest} style={{padding: '8px 12px', cursor: 'pointer'}}>Tambah</button><button onClick={handleCopySelected} disabled={selectedGuests.length === 0} style={{padding: '8px 12px', cursor: 'pointer', marginLeft: 'auto', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', opacity: selectedGuests.length === 0 ? 0.5 : 1}}>Salin {selectedGuests.length > 0 ? selectedGuests.length : ''} Link</button></div>{status.error && <p style={{color: 'red', textAlign: 'center'}}>{status.error}</p>}<div style={{overflowY: 'auto', flex: 1}}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={{...tableHeaderStyle, width: '40px'}}><input type="checkbox" onChange={handleSelectAll} checked={guests.length > 0 && selectedGuests.length === guests.length} /></th><th style={tableHeaderStyle}>Nama Tamu</th><th style={tableHeaderStyle}>Aksi</th></tr></thead><tbody>{status.loading ? (<tr><td colSpan="3" style={{textAlign: 'center', padding: '20px'}}>Memuat...</td></tr>) : guests.length > 0 ? (guests.map((guest, index) => (<tr key={index}><td style={tableCellStyle}><input type="checkbox" checked={selectedGuests.includes(guest.guest_name)} onChange={() => handleSelectGuest(guest.guest_name)} /></td><td style={tableCellStyle}>{guest.guest_name}</td><td style={tableCellStyle}><button onClick={() => copyToClipboard(`${baseUrl}&to=${encodeURIComponent(guest.guest_name.replace(/\s/g, '+'))}`)}>Salin</button><button onClick={() => handleRemoveGuest(guest.guest_name)} style={{backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginLeft: '10px'}}>Hapus</button></td></tr>))) : (<tr><td colSpan="3" style={{textAlign: 'center', padding: '20px'}}>Belum ada daftar tamu.</td></tr>)}</tbody></table></div><button onClick={onClose} style={closeButtonStyle}>Tutup</button></div></div> );
-};
-
-const SortableItem = (props) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({id: props.id});
-    const style = { transform: CSS.Transform.toString(transform), transition, padding: '10px', margin: '0 0 8px 0', backgroundColor: '#f9f9f9', border: '1px solid #ddd', borderRadius: '4px', display: 'flex', alignItems: 'center', cursor: 'grab' };
-    return (<div ref={setNodeRef} style={style} {...attributes} {...listeners}><i className="fas fa-grip-vertical" style={{ marginRight: '10px', color: '#aaa' }}></i>{props.children}</div>);
-};
-
-const LayoutEditor = ({ layout, setLayout, allComponents }) => {
-    const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, }));
-    function handleDragEnd(event) { const {active, over} = event; if (active.id !== over.id) { setLayout((items) => { const oldIndex = items.indexOf(active.id); const newIndex = items.indexOf(over.id); return arrayMove(items, oldIndex, newIndex); }); } }
-    return ( <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={layout} strategy={verticalListSortingStrategy}><div style={{ border: '1px solid #eee', padding: '10px', borderRadius: '5px' }}>{layout.map(id => <SortableItem key={id} id={id} allComponents={allComponents}/>)}</div></SortableContext></DndContext> );
+    return ( <div style={modalBackdropStyle} onClick={onClose}><div style={modalContentStyle} onClick={e => e.stopPropagation()}><h2 style={{marginTop: 0}}>Daftar Tamu</h2><p style={{marginTop: 0, marginBottom: '20px', color: '#555'}}>Untuk: <strong>{invitationTitle}</strong></p><div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}><input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileImport} /><button onClick={() => fileInputRef.current.click()} style={{padding: '8px 12px', cursor: 'pointer'}}>Impor CSV</button><input type="text" value={newGuest} onChange={(e) => setNewGuest(e.target.value)} placeholder="Nama Tamu Baru" style={{flex: 1, padding: '8px', minWidth: '200px'}} onKeyPress={(e) => e.key === 'Enter' && handleAddGuest()} /><button onClick={handleAddGuest} style={{padding: '8px 12px', cursor: 'pointer'}}>Tambah</button><button onClick={handleCopySelected} disabled={selectedGuests.length === 0} style={{padding: '8px 12px', cursor: 'pointer', marginLeft: 'auto', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', opacity: selectedGuests.length === 0 ? 0.5 : 1}}>Salin {selectedGuests.length > 0 ? selectedGuests.length : ''} Link</button></div>{status.error && <p style={{color: 'red', textAlign: 'center'}}>{status.error}</p>}<div style={{overflowY: 'auto', flex: 1}}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={tableHeaderStyle}><input type="checkbox" onChange={handleSelectAll} checked={guests.length > 0 && selectedGuests.length === guests.length} /></th><th style={tableHeaderStyle}>Nama Tamu</th><th style={tableHeaderStyle}>Aksi</th></tr></thead><tbody>{status.loading ? (<tr><td colSpan="3" style={{textAlign: 'center', padding: '20px'}}>Memuat...</td></tr>) : guests.length > 0 ? (guests.map((guest, index) => (<tr key={index}><td style={tableCellStyle}><input type="checkbox" checked={selectedGuests.includes(guest.guest_name)} onChange={() => handleSelectGuest(guest.guest_name)} /></td><td style={tableCellStyle}>{guest.guest_name}</td><td style={tableCellStyle}><button onClick={() => copyToClipboard(`${baseUrl}&to=${encodeURIComponent(guest.guest_name.replace(/\s/g, '+'))}`)}>Salin</button><button onClick={() => handleRemoveGuest(guest.guest_name)} style={{backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginLeft: '10px'}}>Hapus</button></td></tr>))) : (<tr><td colSpan="3" style={{textAlign: 'center', padding: '20px'}}>Belum ada daftar tamu.</td></tr>)}</tbody></table></div><button onClick={onClose} style={closeButtonStyle}>Tutup</button></div></div> );
 };
 
 const templates = { classic: { name: 'Classic Elegant', layout: ['mempelai', 'acara', 'cerita', 'galeri', 'hadiah', 'rsvp', 'penutup'] }, modern: { name: 'Modern Minimalist', layout: ['mempelai', 'acara', 'galeri', 'rsvp', 'hadiah', 'penutup'] }, simple: { name: 'Simple & Sweet', layout: ['mempelai', 'acara', 'rsvp', 'penutup'] } };
-const allComponents = { mempelai: 'Profil Mempelai', acara: 'Detail Acara & Countdown', cerita: 'Cerita Cinta', galeri: 'Galeri Foto & Video', hadiah: 'Amplop Digital', rsvp: 'Ucapan & RSVP', penutup: 'Salam Penutup' };
 const defaultInvitationState = { title: '', template_id: 'classic', layout_data: templates.classic.layout, cover_image: [], couple: { groom: { name: '', nick: '', father: '', mother: '', photo: '' }, bride: { name: '', nick: '', father: '', mother: '', photo: '' } }, events: [{ type: 'Akad Nikah', date: '', time: '', venue: '', mapLink: '' }], gifts: [{ bank: 'BCA', number: '', name: '' }], gallery: [], story: '', music_url: '', export_token: '' };
 
 export default function Dashboard({ handleLogout }) {
@@ -159,37 +108,31 @@ export default function Dashboard({ handleLogout }) {
     const [isUploading, setIsUploading] = useState({ gallery: false, cover: false, groom: false, bride: false, music: false });
     const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
     
-    const showToast = useCallback((message, type = 'success') => {
+    const showToast = (message, type = 'success') => {
         setToast({ show: true, message, type });
         setTimeout(() => {
             setToast({ show: false, message: '', type });
         }, 3000);
-    }, []);
+    };
 
-    const copyToClipboard = useCallback((text, message) => {
+    const copyToClipboard = (text, message) => {
         navigator.clipboard.writeText(text).then(() => {
             showToast(message || 'Teks berhasil disalin!');
         }, () => {
             showToast('Gagal menyalin.', 'error');
         });
-    }, [showToast]);
+    };
 
     const openGuestModal = (invitation) => { setCurrentInvitation(invitation); setIsGuestModalOpen(true); };
-    
-    const fetchInvitations = useCallback(async () => { try { const API_URL = 'http://localhost/proyek_undangan/api/get_invitations.php'; const response = await fetch(API_URL, { credentials: 'include' }); if (!response.ok) { throw new Error('Gagal mengambil daftar undangan.'); } const data = await response.json(); setInvitations(data); } catch (error) { setStatusMessage({ type: 'error', text: error.message }); } }, []);
-    
-    useEffect(() => {
-        fetchInvitations();
-    }, [fetchInvitations]);
-    
+    const fetchInvitations = async () => { try { const API_URL = 'http://localhost/proyek_undangan/api/get_invitations.php'; const response = await fetch(API_URL, { credentials: 'include' }); if (!response.ok) { throw new Error('Gagal mengambil daftar undangan.'); } const data = await response.json(); setInvitations(data); } catch (error) { setStatusMessage({ type: 'error', text: error.message }); } };
+    useEffect(() => { fetchInvitations(); }, []);
     const handleShowRsvps = async (id, inv) => { setIsModalOpen(true); setCurrentInvitationTitle(inv.title); setCurrentInvitation(inv); try { const API_URL = `http://localhost/proyek_undangan/api/get_rsvps.php?id=${id}`; const response = await fetch(API_URL, {credentials: 'include'}); if (!response.ok) { throw new Error('Gagal memuat RSVP'); } const data = await response.json(); setCurrentRsvps(data); } catch (error) { setCurrentRsvps([]); } };
     const handleSaveOrUpdate = async (e) => { e.preventDefault(); const filteredEvents = (invitation.events || []).filter(event => event.type && event.date); const filteredGifts = (invitation.gifts || []).filter(gift => gift.bank && gift.number); const dataToSave = { ...invitation, events: filteredEvents, gifts: filteredGifts }; const isEditing = editingId !== null; const API_URL = isEditing ? 'http://localhost/proyek_undangan/api/update_invitation.php' : 'http://localhost/proyek_undangan/api/save_invitation.php'; setStatusMessage({ type: 'loading', text: isEditing ? 'Memperbarui...' : 'Menyimpan...' }); const payload = isEditing ? { ...dataToSave, id: editingId } : dataToSave; try { const response = await fetch(API_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) { const errorResult = await response.json().catch(() => ({ message: `Server error: ${response.status} ${response.statusText}` })); throw new Error(errorResult.message); } const result = await response.json(); if (result.status === 'success') { setStatusMessage({ type: 'success', text: result.message }); setInvitation(defaultInvitationState); setEditingId(null); fetchInvitations(); } else { throw new Error(result.message || 'Terjadi kesalahan yang tidak diketahui.'); } } catch (error) { console.error("Save/Update Error:", error); setStatusMessage({ type: 'error', text: error.message }); } };
     const handleDelete = async (id) => { if (window.confirm(`Yakin ingin menghapus undangan ID: ${id}?`)) { try { const API_URL = 'http://localhost/proyek_undangan/api/delete_invitation.php'; const response = await fetch(API_URL, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); const result = await response.json(); if (result.status === 'success') { setStatusMessage({ type: 'success', text: result.message }); fetchInvitations(); } else { throw new Error(result.message); } } catch (error) { setStatusMessage({ type: 'error', text: `Gagal menghapus: ${error.message}` }); } } };
-    const handleEdit = (id) => { const item = invitations.find(i => i.id === id); if(item) { setInvitation({ ...defaultInvitationState, ...item, couple: item.couple_data || defaultInvitationState.couple, events: item.event_data && item.event_data.length > 0 ? item.event_data : defaultInvitationState.events, gifts: item.gift_data && item.gift_data.length > 0 ? item.gift_data : defaultInvitationState.gifts, gallery: item.gallery_data || [], cover_image: item.cover_image || [], music_url: item.music_url || '', template_id: item.template_id || 'classic', layout_data: item.layout_data && item.layout_data.length > 0 ? item.layout_data : templates[item.template_id]?.layout || templates.classic.layout, export_token: item.export_token || '' }); setEditingId(id); window.scrollTo(0,0); }};
+    const handleEdit = (id) => { const item = invitations.find(i => i.id === id); if(item) { setInvitation({ ...defaultInvitationState, ...item, couple: item.couple_data || defaultInvitationState.couple, events: item.event_data && item.event_data.length > 0 ? item.event_data : defaultInvitationState.events, gifts: item.gift_data && item.gift_data.length > 0 ? item.gift_data : defaultInvitationState.gifts, gallery: item.gallery_data || [], cover_image: item.cover_image || [], music_url: item.music_url || '', template_id: item.template_id || 'classic', layout_data: item.layout_data || templates.classic.layout, export_token: item.export_token || '' }); setEditingId(id); window.scrollTo(0,0); }};
     const handleCancelEdit = () => { setInvitation(defaultInvitationState); setEditingId(null); setStatusMessage({ type: '', text: '' }); };
     const handleChange = (e) => { const { name, value } = e.target; setInvitation(prev => ({ ...prev, [name]: value })); };
     const handleTemplateChange = (e) => { const templateId = e.target.value; const newLayout = templates[templateId]?.layout || templates.classic.layout; setInvitation(prev => ({ ...prev, template_id: templateId, layout_data: newLayout })); };
-    const setLayoutData = (newLayout) => { setInvitation(prev => ({ ...prev, layout_data: newLayout })); };
     const handleEventChange = (index, field, value) => { const newEvents = [...(invitation.events || [])]; newEvents[index] = { ...newEvents[index], [field]: value }; setInvitation(prev => ({...prev, events: newEvents})); };
     const addEvent = () => { setInvitation(prev => ({ ...prev, events: [...(prev.events || []), { type: 'Resepsi', date: '', time: '', venue: '', mapLink: '' }] })); };
     const removeEvent = (index) => { if ((invitation.events || []).length > 1 && window.confirm('Hapus acara ini?')) { setInvitation(prev => ({ ...prev, events: prev.events.filter((_, i) => i !== index) })); } };
@@ -211,7 +154,6 @@ export default function Dashboard({ handleLogout }) {
             {statusMessage.text && ( <div style={{ padding: '1rem', margin: '1rem 0', borderRadius: '5px', color: 'white', backgroundColor: statusMessage.type === 'success' ? '#28a745' : statusMessage.type === 'error' ? '#dc3545' : '#6c757d' }}>{statusMessage.text}</div> )}
             <form onSubmit={handleSaveOrUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', border: '1px solid #ddd', padding: '1.5rem', borderRadius: '5px', backgroundColor: 'white' }}>
                 <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Pengaturan Utama</legend><InputField label="Judul Undangan:" type="text" name="title" value={invitation.title || ''} onChange={handleChange} required /><SelectField label="Pilih Tema Undangan:" name="template_id" value={invitation.template_id} onChange={handleTemplateChange}>{Object.keys(templates).map(key => (<option key={key} value={key}>{templates[key].name}</option>))}</SelectField></fieldset>
-                <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Tata Letak Halaman (Drag & Drop)</legend><p style={{fontSize: '0.9rem', color: '#666', marginBottom: '1rem'}}>Seret untuk mengubah urutan bagian pada halaman undangan Anda.</p><LayoutEditor layout={invitation.layout_data || []} setLayout={setLayoutData} allComponents={allComponents} /></fieldset>
                 <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Foto Sampul (Cover Slideshow)</legend><ImageUploader label="Upload Foto untuk Cover" onUpload={createUploadHandler('cover_image', true)} isUploading={isUploading.cover} multiple={true} accept="image/*"/><div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>{Array.isArray(invitation.cover_image) && invitation.cover_image.map((url, index) => (<MediaPreview key={index} url={url} onRemove={() => removeMedia('cover_image', index)} />))}</div></fieldset>
                 <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Informasi Mempelai</legend><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}><div><h4 style={{marginTop: 0, borderBottom: '1px solid #ddd', paddingBottom: '0.5rem'}}>Mempelai Pria</h4><ImageUploader label="Foto Mempelai Pria" onUpload={createUploadHandler('groom')} isUploading={isUploading.groom} currentImage={invitation.couple?.groom?.photo} onRemove={() => removeCouplePhoto('groom')}/><InputField label="Nama Lengkap:" type="text" name="couple.groom.name" value={invitation.couple?.groom?.name || ''} onChange={handleChange} /><InputField label="Nama Panggilan:" type="text" name="couple.groom.nick" value={invitation.couple?.groom?.nick || ''} onChange={handleChange} /><InputField label="Nama Ayah:" type="text" name="couple.groom.father" value={invitation.couple?.groom?.father || ''} onChange={handleChange} /><InputField label="Nama Ibu:" type="text" name="couple.groom.mother" value={invitation.couple?.groom?.mother || ''} onChange={handleChange} /></div><div><h4 style={{marginTop: 0, borderBottom: '1px solid #ddd', paddingBottom: '0.5rem'}}>Mempelai Wanita</h4><ImageUploader label="Foto Mempelai Wanita" onUpload={createUploadHandler('bride')} isUploading={isUploading.bride} currentImage={invitation.couple?.bride?.photo} onRemove={() => removeCouplePhoto('bride')} /><InputField label="Nama Lengkap:" type="text" name="couple.bride.name" value={invitation.couple?.bride?.name || ''} onChange={handleChange} /><InputField label="Nama Panggilan:" type="text" name="couple.bride.nick" value={invitation.couple?.bride?.nick || ''} onChange={handleChange} /><InputField label="Nama Ayah:" type="text" name="couple.bride.father" value={invitation.couple?.bride?.father || ''} onChange={handleChange} /><InputField label="Nama Ibu:" type="text" name="couple.bride.mother" value={invitation.couple?.bride?.mother || ''} onChange={handleChange} /></div></div></fieldset>
                 <fieldset style={{border: '1px solid #eee', padding: '1rem', borderRadius: '4px'}}><legend style={{ fontWeight: 'bold', padding: '0 .5rem' }}>Detail Acara</legend>{(invitation.events || []).map((event, index) => (<div key={index} style={{border: '1px dashed #ccc', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', position: 'relative'}}><button type="button" onClick={() => removeEvent(index)} style={{position: 'absolute', top: '10px', right: '10px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>✖</button><InputField label={`Jenis Acara ${index+1}`} type="text" value={event.type || ''} onChange={(e) => handleEventChange(index, 'type', e.target.value)} /><InputField label="Tanggal" type="date" value={event.date || ''} onChange={(e) => handleEventChange(index, 'date', e.target.value)} /><InputField label="Waktu" type="text" placeholder="Contoh: 09:00" value={event.time || ''} onChange={(e) => handleEventChange(index, 'time', e.target.value)} /><InputField label="Nama Tempat" type="text" value={event.venue || ''} onChange={(e) => handleEventChange(index, 'venue', e.target.value)} /><InputField label="Link Google Maps" type="text" value={event.mapLink || ''} onChange={(e) => handleEventChange(index, 'mapLink', e.target.value)} /></div>))}<button type="button" onClick={addEvent} style={{padding: '0.5rem 1rem', border: '1px solid #007bff', backgroundColor: 'white', color: '#007bff', borderRadius: '4px', cursor: 'pointer'}}>+ Tambah Acara</button></fieldset>
